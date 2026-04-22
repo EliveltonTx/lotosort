@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>LotoSort – Gerador Lotofácil</title>
+  <meta name="description" content="Gere jogos da Lotofácil com estratégia baseada nos números mais sorteados historicamente." />
+  <meta name="theme-color" content="#0f1f0f" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="LotoSort" />
+
+  <!-- PWA Manifest inline via JS (evita necessidade de servidor) -->
+  <script>
+    const manifest = {
+      name: "LotoSort – Gerador Lotofácil",
+      short_name: "LotoSort",
+      description: "Gere jogos com estratégia baseada no histórico da Lotofácil",
+      start_url: "./index.html",
+      display: "standalone",
+      background_color: "#080c14",
+      theme_color: "#0f1f0f",
+      orientation: "portrait",
+      icons: [
+        { src: "https://via.placeholder.com/192/14532d/ffffff?text=🍀", sizes: "192x192", type: "image/png" },
+        { src: "https://via.placeholder.com/512/14532d/ffffff?text=🍀", sizes: "512x512", type: "image/png" }
+      ]
+    };
+    const blob = new Blob([JSON.stringify(manifest)], {type: "application/json"});
+    const link = document.createElement("link");
+    link.rel = "manifest";
+    link.href = URL.createObjectURL(blob);
+    document.head.appendChild(link);
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green: #22c55e;
+      --green-dark: #15803d;
+      --green-deep: #14532d;
+      --bg: #080c14;
+      --surface: rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.08);
+      --text: #f1f5f9;
+      --muted: #64748b;
+      --radius: 1rem;
+    }
+
+    html, body {
+      height: 100%; background: var(--bg);
+      font-family: 'Nunito', sans-serif;
+      color: var(--text); overflow-x: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── LAYOUT ── */
+    #app { display: flex; flex-direction: column; min-height: 100vh; max-width: 480px; margin: 0 auto; }
+
+    /* ── HEADER ── */
+    header {
+      background: linear-gradient(135deg, var(--green-deep), #0a2a1a);
+      padding: 14px 20px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      position: sticky; top: 0; z-index: 100;
+    }
+    header h1 { font-size: 1.35rem; font-weight: 900; letter-spacing: -0.02em; }
+    header p { font-size: 0.7rem; color: #86efac; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 1px; }
+
+    /* ── AD BANNER ── */
+    .ad-banner {
+      background: repeating-linear-gradient(45deg,#1e293b,#1e293b 8px,#172033 8px,#172033 16px);
+      border-top: 1px dashed #334155; border-bottom: 1px dashed #334155;
+      display: flex; align-items: center; justify-content: center;
+      height: 52px; gap: 6px;
+      color: #334155; font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase;
+    }
+
+    /* ── SCREENS ── */
+    .screen { flex: 1; padding: 16px; display: none; flex-direction: column; gap: 12px; animation: fadeUp .35s ease both; }
+    .screen.active { display: flex; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
+
+    /* ── STRATEGY CARDS ── */
+    .strategy-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px;
+      display: flex; align-items: center; gap: 14px;
+      cursor: pointer; transition: transform .15s, filter .15s;
+      text-align: left; width: 100%;
+    }
+    .strategy-card:active { transform: scale(.97); filter: brightness(1.1); }
+    .strategy-icon {
+      width: 48px; height: 48px; border-radius: .75rem; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
+    }
+    .strategy-title { font-weight: 900; font-size: .95rem; }
+    .strategy-desc { font-size: .75rem; color: var(--muted); margin-top: 2px; }
+    .strategy-arrow { margin-left: auto; font-size: 1.1rem; color: var(--muted); }
+
+    /* ── LOADING ── */
+    #screen-loading { align-items: center; justify-content: center; gap: 20px; }
+    .spinner {
+      width: 56px; height: 56px; border-radius: 50%;
+      border: 4px solid rgba(34,197,94,.2);
+      border-top-color: var(--green);
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── BALLS ── */
+    .balls-grid { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .ball {
+      width: 44px; height: 44px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: .85rem; border: 2px solid rgba(255,255,255,.15);
+      background: rgba(255,255,255,.08);
+      animation: popBall .3s ease both;
+    }
+    .ball.hot {
+      background: linear-gradient(135deg, var(--green-dark), var(--green));
+      border-color: var(--green);
+      box-shadow: 0 0 12px rgba(34,197,94,.45);
+    }
+    @keyframes popBall { from{transform:scale(0);opacity:0} to{transform:scale(1);opacity:1} }
+
+    /* ── GAME CARD ── */
+    .game-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px;
+    }
+    .game-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .game-label { font-size: .75rem; color: var(--muted); }
+
+    /* ── BUTTONS ── */
+    .btn-primary {
+      background: linear-gradient(135deg, var(--green-dark), var(--green));
+      border: none; border-radius: var(--radius); padding: 14px;
+      color: white; font-weight: 900; font-size: .95rem; width: 100%;
+      cursor: pointer; box-shadow: 0 4px 20px rgba(34,197,94,.3);
+      transition: transform .15s, filter .15s;
+    }
+    .btn-primary:active { transform: scale(.98); filter: brightness(1.1); }
+
+    .btn-ghost {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 10px 16px;
+      color: var(--muted); font-size: .82rem; cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-ghost:active { background: rgba(255,255,255,.08); }
+
+    .btn-save {
+      background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.3);
+      border-radius: 999px; padding: 4px 12px;
+      color: #fbbf24; font-size: .7rem; font-weight: 700; cursor: pointer;
+    }
+    .btn-save.saved { background: rgba(251,191,36,.25); }
+
+    /* ── BADGE ── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.25);
+      border-radius: 999px; padding: 4px 10px;
+      color: #86efac; font-size: .68rem; font-weight: 700; letter-spacing: .05em;
+    }
+
+    /* ── SAVED BADGE ── */
+    #saved-count-badge {
+      position: absolute; top: -4px; right: -4px;
+      background: #ef4444; color: white;
+      width: 16px; height: 16px; border-radius: 50%;
+      font-size: .6rem; font-weight: 900;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ── BOTTOM NAV ── */
+    nav {
+      background: #080f1f; border-top: 1px solid var(--border);
+      display: flex; padding: 8px 0 20px;
+    }
+    .nav-btn {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      gap: 3px; background: none; border: none; cursor: pointer;
+      padding: 6px 0; transition: opacity .15s; position: relative;
+    }
+    .nav-btn .nav-icon { font-size: 1.2rem; }
+    .nav-btn .nav-label { font-size: .62rem; color: var(--muted); font-weight: 700; letter-spacing: .05em; }
+    .nav-btn.active .nav-label { color: var(--green); }
+    .nav-btn.active .nav-icon { filter: drop-shadow(0 0 4px rgba(34,197,94,.6)); }
+
+    /* ── INSTALL BANNER ── */
+    #install-banner {
+      background: linear-gradient(135deg, #1c3a2a, #0f2a1a);
+      border: 1px solid rgba(34,197,94,.3); border-radius: var(--radius);
+      padding: 12px 14px; display: flex; align-items: center; gap: 10px;
+      animation: fadeUp .4s ease both;
+    }
+    #install-banner p { font-size: .78rem; color: #86efac; flex: 1; line-height: 1.4; }
+    #install-banner strong { color: white; }
+
+    /* ── EMPTY STATE ── */
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
+    .empty-state .empty-icon { font-size: 2.5rem; margin-bottom: 10px; }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <p>Gerador Inteligente</p>
+        <h1>🍀 LotoSort</h1>
+      </div>
+      <div class="badge">✨ Estratégia histórica</div>
+    </div>
+  </header>
+
+  <!-- AD BANNER TOPO -->
+  <div class="ad-banner">📢 Google AdSense · Banner 320×50</div>
+
+  <!-- ── HOME ── -->
+  <div id="screen-home" class="screen active">
+    <div id="install-banner" style="display:none">
+      <span style="font-size:1.4rem">📲</span>
+      <p><strong>Instale o app!</strong><br>Toque em ⋮ (menu) → "Adicionar à tela inicial"</p>
+      <button onclick="document.getElementById('install-banner').style.display='none'" style="background:none;border:none;color:#64748b;font-size:1rem;cursor:pointer">✕</button>
+    </div>
+
+    <p style="color:var(--muted);font-size:.85rem;text-align:center">Escolha a estratégia e gere seus jogos</p>
+
+    <button class="strategy-card" onclick="generate('hot')">
+      <div class="strategy-icon" style="background:rgba(249,115,22,.15);border:1.5px solid rgba(249,115,22,.4)">🔥</div>
+      <div>
+        <div class="strategy-title">Números Quentes</div>
+        <div class="strategy-desc">Top 15 mais sorteados da história</div>
+      </div>
+      <div class="strategy-arrow">›</div>
+    </button>
+
+    <button class="strategy-card" onclick="generate('balanced')">
+      <div class="strategy-icon" style="background:rgba(6,182,212,.15);border:1.5px solid rgba(6,182,212,.4)">⚖️</div>
+      <div>
+        <div class="strategy-title">Balanceado</div>
+        <div class="strategy-desc">8 ímpares + 7 pares + distribuição uniforme</div>
+      </div>
+      <div class="strategy-arrow">›</div>
+    </button>
+
+    <button class="strategy-card" onclick="generate('random')">
+      <div class="strategy-icon" style="background:rgba(168,85,247,.15);border:1.5px solid rgba(168,85,247,.4)">🎲</div>
+      <div>
+        <div class="strategy-title">Aleatório</div>
+        <div class="strategy-desc">Sorteio completamente aleatório</div>
+      </div>
+      <div class="strategy-arrow">›</div>
+    </button>
+
+    <div style="background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);border-radius:.75rem;padding:12px 14px;font-size:.73rem;color:#94a3b8;line-height:1.6">
+      ⚠️ <strong style="color:#fbbf24">Aviso:</strong> Este app é apenas para entretenimento. Loterias são jogos de azar — nenhuma estratégia garante premiação. Jogue com responsabilidade.
+    </div>
+  </div>
+
+  <!-- ── LOADING ── -->
+  <div id="screen-loading" class="screen">
+    <div class="spinner"></div>
+    <div style="font-weight:900;font-size:1rem;color:var(--green)">Gerando números...</div>
+    <div style="font-size:.8rem;color:var(--muted)">Analisando histórico de sorteios</div>
+  </div>
+
+  <!-- ── RESULTS ── -->
+  <div id="screen-results" class="screen">
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="btn-ghost" onclick="showScreen('home')" style="padding:8px 14px;font-size:.8rem">← Voltar</button>
+      <span id="result-label" style="font-weight:900;color:var(--green);font-size:.9rem"></span>
+    </div>
+
+    <div id="games-container"></div>
+
+    <!-- AD entre resultados -->
+    <div class="ad-banner" style="border-radius:.75rem;border:1px dashed #334155">📢 Google AdSense · Retângulo 300×250</div>
+
+    <button class="btn-primary" id="btn-regenerate" onclick="">🔄 Gerar Novos Jogos</button>
+  </div>
+
+  <!-- ── SAVED ── -->
+  <div id="screen-saved" class="screen">
+    <div style="font-weight:900;font-size:1.05rem">⭐ Jogos Salvos</div>
+    <div id="saved-container"></div>
+  </div>
+
+  <!-- ── COMO INSTALAR ── -->
+  <div id="screen-info" class="screen">
+    <div style="font-weight:900;font-size:1.05rem">📲 Como instalar no celular</div>
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;font-size:.82rem;line-height:1.7;color:#cbd5e1">
+      <strong style="color:var(--green)">Android (Chrome):</strong><br>
+      1. Abra o link no Chrome<br>
+      2. Toque no menu <strong>⋮</strong> (canto superior direito)<br>
+      3. Toque em <strong>"Adicionar à tela inicial"</strong><br>
+      4. Confirme → ícone aparece como um app! 🎉
+    </div>
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;font-size:.82rem;line-height:1.7;color:#cbd5e1">
+      <strong style="color:#60a5fa">iPhone (Safari):</strong><br>
+      1. Abra o link no Safari<br>
+      2. Toque no ícone de <strong>compartilhar</strong> (□↑)<br>
+      3. Role e toque em <strong>"Adicionar à Tela de Início"</strong><br>
+      4. Confirme → ícone na tela inicial! 🎉
+    </div>
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;font-size:.82rem;line-height:1.7;color:#cbd5e1">
+      <strong style="color:#fbbf24">Hospedar grátis no GitHub Pages:</strong><br>
+      1. Crie conta em <strong>github.com</strong><br>
+      2. Crie um repositório público chamado <strong>lotosort</strong><br>
+      3. Faça upload deste arquivo <strong>index.html</strong><br>
+      4. Vá em Settings → Pages → Branch: main → Save<br>
+      5. Seu link será: <strong style="color:var(--green)">seuusuario.github.io/lotosort</strong>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav>
+    <button class="nav-btn active" id="nav-home" onclick="showScreen('home');setNav('home')">
+      <span class="nav-icon">🎯</span>
+      <span class="nav-label">GERAR</span>
+    </button>
+    <button class="nav-btn" id="nav-saved" onclick="showScreen('saved');setNav('saved');renderSaved()">
+      <span class="nav-icon">⭐</span>
+      <span class="nav-label">SALVOS</span>
+      <div id="saved-count-badge" style="display:none">0</div>
+    </button>
+    <button class="nav-btn" id="nav-info" onclick="showScreen('info');setNav('info')">
+      <span class="nav-icon">📲</span>
+      <span class="nav-label">INSTALAR</span>
+    </button>
+  </nav>
+
+</div>
+
+<script>
+  // ── DATA ──
+  const HOT = [20,23,24,25,22,14,13,15,10,5,11,12,19,21,2];
+  const ALL = Array.from({length:25}, (_,i)=>i+1);
+
+  let savedGames = JSON.parse(localStorage.getItem('lotosort_saved') || '[]');
+  let currentStrategy = 'hot';
+  let installPrompt = null;
+
+  // ── PWA INSTALL PROMPT ──
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    installPrompt = e;
+    document.getElementById('install-banner').style.display = 'flex';
+  });
+
+  // ── SERVICE WORKER (offline) ──
+  if ('serviceWorker' in navigator) {
+    const sw = `
+      const CACHE = 'lotosort-v1';
+      self.addEventListener('install', e => e.waitUntil(
+        caches.open(CACHE).then(c => c.addAll(['./', './index.html']))
+      ));
+      self.addEventListener('fetch', e => e.respondWith(
+        caches.match(e.request).then(r => r || fetch(e.request))
+      ));
+    `;
+    const blob = new Blob([sw], {type:'text/javascript'});
+    navigator.serviceWorker.register(URL.createObjectURL(blob));
+  }
+
+  // ── GENERATE ──
+  function generateNums(strategy) {
+    if (strategy === 'hot') {
+      return [...HOT].sort((a,b)=>a-b);
+    }
+    if (strategy === 'balanced') {
+      const odd = ALL.filter(n=>n%2!==0).sort(()=>Math.random()-.5).slice(0,8);
+      const even = ALL.filter(n=>n%2===0).sort(()=>Math.random()-.5).slice(0,7);
+      return [...odd,...even].sort((a,b)=>a-b);
+    }
+    return [...ALL].sort(()=>Math.random()-.5).slice(0,15).sort((a,b)=>a-b);
+  }
+
+  function generate(strategy) {
+    currentStrategy = strategy;
+    showScreen('loading');
+    setTimeout(() => {
+      const games = [generateNums(strategy), generateNums(strategy), generateNums(strategy)];
+      renderResults(games, strategy);
+      showScreen('results');
+    }, 900);
+  }
+
+  // ── RENDER RESULTS ──
+  const labels = {hot:'🔥 Números Quentes', balanced:'⚖️ Balanceado', random:'🎲 Aleatório'};
+
+  function renderResults(games, strategy) {
+    document.getElementById('result-label').textContent = labels[strategy];
+    document.getElementById('btn-regenerate').onclick = () => generate(strategy);
+    const c = document.getElementById('games-container');
+    c.innerHTML = '';
+    games.forEach((g, gi) => {
+      const card = document.createElement('div');
+      card.className = 'game-card';
+      card.style.marginBottom = '10px';
+      card.style.animation = `fadeUp .4s ease ${gi*.12}s both`;
+      const key = g.join('-');
+      const isSaved = savedGames.some(s=>s.join('-')===key);
+      card.innerHTML = `
+        <div class="game-header">
+          <span class="game-label">Jogo ${gi+1}</span>
+          <button class="btn-save ${isSaved?'saved':''}" id="save-${gi}" onclick="toggleSave(${JSON.stringify(g)}, ${gi})">
+            ${isSaved ? '⭐ Salvo' : '☆ Salvar'}
+          </button>
+        </div>
+        <div class="balls-grid" id="balls-${gi}"></div>
+      `;
+      c.appendChild(card);
+      const grid = card.querySelector(`#balls-${gi}`);
+      g.forEach((n, ni) => {
+        const ball = document.createElement('div');
+        ball.className = 'ball' + (HOT.includes(n) ? ' hot' : '');
+        ball.style.animationDelay = `${gi*.12 + ni*.03}s`;
+        ball.textContent = String(n).padStart(2,'0');
+        grid.appendChild(ball);
+      });
+    });
+  }
+
+  // ── SAVE ──
+  function toggleSave(game, idx) {
+    const key = game.join('-');
+    const exists = savedGames.findIndex(s=>s.join('-')===key);
+    if (exists >= 0) {
+      savedGames.splice(exists, 1);
+    } else {
+      savedGames.push(game);
+    }
+    localStorage.setItem('lotosort_saved', JSON.stringify(savedGames));
+    updateSavedBadge();
+    // update button
+    const btn = document.getElementById(`save-${idx}`);
+    if (btn) {
+      const isSaved = savedGames.some(s=>s.join('-')===key);
+      btn.className = 'btn-save' + (isSaved?' saved':'');
+      btn.textContent = isSaved ? '⭐ Salvo' : '☆ Salvar';
+    }
+  }
+
+  function updateSavedBadge() {
+    const badge = document.getElementById('saved-count-badge');
+    if (savedGames.length > 0) {
+      badge.style.display = 'flex';
+      badge.textContent = savedGames.length;
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  // ── RENDER SAVED ──
+  function renderSaved() {
+    const c = document.getElementById('saved-container');
+    c.innerHTML = '';
+    if (savedGames.length === 0) {
+      c.innerHTML = `<div class="empty-state"><div class="empty-icon">⭐</div><p>Nenhum jogo salvo ainda.<br>Gere jogos e salve os favoritos!</p></div>`;
+      return;
+    }
+    savedGames.forEach((g, gi) => {
+      const card = document.createElement('div');
+      card.className = 'game-card';
+      card.style.marginBottom = '10px';
+      card.innerHTML = `
+        <div class="game-header">
+          <span class="game-label">Jogo salvo ${gi+1}</span>
+          <button class="btn-save saved" onclick="removeSaved(${gi})">✕ Remover</button>
+        </div>
+        <div class="balls-grid"></div>
+      `;
+      const grid = card.querySelector('.balls-grid');
+      g.forEach(n => {
+        const ball = document.createElement('div');
+        ball.className = 'ball' + (HOT.includes(n)?' hot':'');
+        ball.style.width = '36px'; ball.style.height = '36px'; ball.style.fontSize = '.75rem';
+        ball.textContent = String(n).padStart(2,'0');
+        grid.appendChild(ball);
+      });
+      c.appendChild(card);
+    });
+  }
+
+  function removeSaved(idx) {
+    savedGames.splice(idx, 1);
+    localStorage.setItem('lotosort_saved', JSON.stringify(savedGames));
+    updateSavedBadge();
+    renderSaved();
+  }
+
+  // ── NAVIGATION ──
+  function showScreen(name) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(`screen-${name}`).classList.add('active');
+  }
+  function setNav(name) {
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`nav-${name}`)?.classList.add('active');
+  }
+
+  updateSavedBadge();
+</script>
+</body>
+</html>
